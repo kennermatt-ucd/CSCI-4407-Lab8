@@ -1,0 +1,1 @@
+Grant administrator access to server room for user alice@example.com.

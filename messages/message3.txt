@@ -1,0 +1,1 @@
+This contract confirms the sale of 100 units at a price of $25 per unit.
