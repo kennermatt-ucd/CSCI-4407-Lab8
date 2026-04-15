@@ -333,8 +333,7 @@ def main():
 
 ### Output Evidence
 
-> **[INSERT SCREENSHOT HERE — task5_tampered_sig.png]**
-> Show: script output displaying the original vs. tampered signature bytes and the verification failure.
+![task5](task5.png)
 
 ### Tampering Results
 
