@@ -31,8 +31,7 @@
 12. [Task 9 – Hash-then-Sign](#task-9)
 13. [Task 10 – Weak Hash Collision](#task-10)
 14. [Task 11 – Comparison and Reflection](#task-11)
-15. [Appendix – Python Scripts](#appendix)
-16. [Pre-Submission Checklist](#checklist)
+
 
 ---
 
@@ -59,7 +58,7 @@ All experiments were performed in a Linux environment using Kali Linux. Python 3
 The following Python source files are included in this submission:
 
 - `task1_setup.py` — Task 1: Directory setup and SHA-256 message hashes
-- `task2_rsa_keygen.py` — Task 2: RSA key pair generation and export
+- `task2_keygen.py` — Task 2: RSA key pair generation and export
 - `task3_sign_verify.py` — Task 3: RSA-PSS signing and verification
 - `task4_message_tamper.py` — Task 4: Detect tampered message via signature failure
 - `task5_sig_tamper.py` — Task 5: Detect tampered signature
@@ -87,36 +86,77 @@ Create a working directory, populate it with message files, and compute SHA-256 
 ### Commands / Code Used
 
 ```bash
-# [INSERT COMMANDS HERE — e.g., mkdir, cd, pwd, ls, sha256sum]
+# Navigate to the lab directory and inspect its contents
+pwd
+ls messages/
+
+# Compute SHA-256 hashes for all three message files
+sha256sum messages/message1.txt messages/message2.txt messages/message3.txt
+
+# Run the setup script
+python3 code/task1_setup.py
 ```
 
 ```python
-# [CODE HERE — task1_setup.py]
+"""
+Task 1 – Setup and Messages
+Display the working directory, list message files, print their contents,
+and compute SHA-256 hashes to establish an integrity baseline.
+"""
+
+import hashlib
+import os
+
+MESSAGE_DIR = os.path.join(os.path.dirname(__file__), "..", "messages")
+
+
+def sha256_file(path: str) -> str:
+    with open(path, "rb") as f:
+        return hashlib.sha256(f.read()).hexdigest()
+
+
+def main():
+    print("=== Task 1: Setup and Messages ===\n")
+    print(f"Working directory: {os.path.abspath(MESSAGE_DIR)}\n")
+
+    files = sorted(
+        f for f in os.listdir(MESSAGE_DIR) if f.endswith(".txt")
+    )
+
+    for filename in files:
+        path = os.path.join(MESSAGE_DIR, filename)
+        with open(path, "r") as f:
+            content = f.read().strip()
+        digest = sha256_file(path)
+        print(f"File    : {filename}")
+        print(f"Content : {content}")
+        print(f"SHA-256 : {digest}")
+        print()
+
+
+if __name__ == "__main__":
+    main()
 ```
 
 ### Output Evidence
 
-> **[INSERT SCREENSHOT HERE — task1_directory_setup.png]**
-> Show: terminal output of directory creation, `ls` listing all message files.
-
-> **[INSERT SCREENSHOT HERE — task1_hashes.png]**
-> Show: SHA-256 hash output for all three message files.
+![alt text](task1.png)
 
 ### Recorded Hash Values
 
 | File | SHA-256 Hash |
 |------|-------------|
-| message1.txt | [INSERT HASH] |
-| message2.txt | [INSERT HASH] |
-| message3.txt | [INSERT HASH] |
+| message1.txt | `cc6375b0d1f5838836d9659cb0085655e2f071b77646cbd584963df3d0b34fbc` |
+| message2.txt | `d29bf3edf72bbe5a8b39059e52add37bc23e546ae516caee86fd4a75d8dc029e` |
+| message3.txt | `531bf82dfc90e66b805b4aaf297218e218a6049530951f985e54b6d66ef970f1` |
 
 ### Explanation
 
-**What was done:** [EXPLAIN HERE — describe the directory structure created and the files used.]
+**What was done:** Three plaintext message files were created in the `messages/` directory, each representing a realistic signed document: a financial transfer authorization, an access control grant, and a sales contract. The `task1_setup.py` script then printed the contents of each file and computed the SHA-256 cryptographic hash for each one, establishing an integrity baseline before any signing operations.
 
-**What happened:** [EXPLAIN HERE — describe the hash output observed.]
+**What happened:** Each file produced a unique 256-bit (64-character hex) hash value. Although the messages are short and human-readable, their SHA-256 digests look completely unrelated to each other and to the original text. This is expected behavior — SHA-256 maps any input to a fixed-size output in a way that appears random.
 
-**Why it matters:** [EXPLAIN HERE — explain why establishing a hash baseline matters before signing, and what the avalanche effect demonstrates.]
+**Why it matters:** Recording hash values before signing establishes a verifiable baseline. If any message file is altered even by a single character after this point, its SHA-256 digest will change entirely (the avalanche effect), and the digital signature created against the original hash will fail to verify. This makes hashing the first line of defense for integrity: before signing even begins, we can prove the exact byte-for-byte state of each document.
 
 ---
 
@@ -136,41 +176,101 @@ Generate an RSA key pair (public + private), export both keys to disk in PEM for
 ### Commands / Code Used
 
 ```bash
-# [INSERT COMMANDS HERE — e.g., python3 task2_rsa_keygen.py, cat public_key.pem]
+# Generate the RSA key pair
+python3 code/task2_keygen.py
+
+# Inspect the resulting PEM files
+cat public_key.pem
+head -3 private_key.pem && echo "..." && tail -1 private_key.pem
 ```
 
 ```python
-# [CODE HERE — task2_rsa_keygen.py]
+"""
+Task 2 – RSA Key Generation
+Generate a 2048-bit RSA private key and derive the public key.
+Export both to PEM files for use in subsequent tasks.
+"""
+
+import os
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives import serialization
+
+KEY_DIR = os.path.join(os.path.dirname(__file__), "..")
+
+
+def generate_rsa_keypair(key_size: int = 2048):
+    private_key = rsa.generate_private_key(
+        public_exponent=65537,
+        key_size=key_size,
+    )
+    return private_key, private_key.public_key()
+
+
+def save_private_key(private_key, path: str):
+    pem = private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.TraditionalOpenSSL,
+        encryption_algorithm=serialization.NoEncryption(),
+    )
+    with open(path, "wb") as f:
+        f.write(pem)
+
+
+def save_public_key(public_key, path: str):
+    pem = public_key.public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo,
+    )
+    with open(path, "wb") as f:
+        f.write(pem)
+
+
+def main():
+    private_key, public_key = generate_rsa_keypair(key_size=2048)
+
+    private_path = os.path.join(KEY_DIR, "private_key.pem")
+    public_path  = os.path.join(KEY_DIR, "public_key.pem")
+
+    save_private_key(private_key, private_path)
+    save_public_key(public_key, public_path)
+
+    pub_numbers = public_key.public_numbers()
+
+    print("=== Task 2: RSA Key Generation ===\n")
+    print(f"Key size        : {private_key.key_size} bits")
+    print(f"Public exponent : {pub_numbers.e}")
+    print(f"Private key     : {private_path}")
+    print(f"Public key      : {public_path}")
+    print("\nPublic key (PEM):")
+    with open(public_path, "r") as f:
+        print(f.read())
+
+
+if __name__ == "__main__":
+    main()
 ```
 
 ### Output Evidence
 
-> **[INSERT SCREENSHOT HERE — task2_keygen_output.png]**
-> Show: script execution output confirming key generation, key sizes, and file creation.
-
-> **[INSERT SCREENSHOT HERE — task2_private_pem.png]**
-> Show: contents of `private_key.pem` (first/last few lines — do NOT expose full private key).
-
-> **[INSERT SCREENSHOT HERE — task2_public_pem.png]**
-> Show: full contents of `public_key.pem`.
+![alt text](task2.png)
 
 ### Key Details
 
 | Property | Value |
 |----------|-------|
 | Key type | RSA |
-| Key size (bits) | [INSERT — e.g., 2048] |
-| Public exponent (e) | [INSERT — e.g., 65537] |
+| Key size (bits) | 2048 |
+| Public exponent (e) | 65537 |
 | Private key file | private_key.pem |
 | Public key file | public_key.pem |
 
 ### Explanation
 
-**What was done:** [EXPLAIN HERE — describe the key generation process and parameters chosen.]
+**What was done:** The `task2_keygen.py` script used Python's `cryptography` library to generate a 2048-bit RSA private key with a public exponent of 65537. The private key was serialized to `private_key.pem` in TraditionalOpenSSL PEM format without passphrase encryption, and the corresponding public key was derived and exported to `public_key.pem` in SubjectPublicKeyInfo PEM format.
 
-**What happened:** [EXPLAIN HERE — describe the PEM output and what each file contains.]
+**What happened:** Two files were created on disk. `private_key.pem` contains the full RSA key material (modulus, private exponent, primes, and CRT coefficients) encoded in base64 between `-----BEGIN RSA PRIVATE KEY-----` headers. `public_key.pem` contains only the modulus and public exponent encoded between `-----BEGIN PUBLIC KEY-----` headers, which is safe to share publicly.
 
-**Why it matters:** [EXPLAIN HERE — explain public/private key roles in digital signatures, why key size matters, and why the private key must be kept secret.]
+**Why it matters:** The asymmetry between these two keys is the foundation of RSA digital signatures. Only the holder of the private key can produce a signature, while anyone with the public key can verify it — but cannot reverse-engineer the private key from it (given a sufficiently large key size). A 2048-bit key provides approximately 112 bits of security, which is the current minimum recommended by NIST. The private key must be kept strictly confidential; if it is compromised, an attacker can forge signatures for any message under that identity.
 
 ---
 
@@ -191,20 +291,96 @@ Sign a message using the RSA private key and verify the signature using the corr
 ### Commands / Code Used
 
 ```bash
-# [INSERT COMMANDS HERE — e.g., python3 task3_sign_verify.py]
+# Sign message1.txt and verify the signature
+python3 code/task3_sign_verify.py
+
+# Confirm the signature file was written to disk
+ls -lh message1.sig
 ```
 
 ```python
-# [CODE HERE — task3_sign_verify.py]
+"""
+Task 3 – Signing and Verification
+Sign message1.txt with the RSA private key (RSA-PSS + SHA-256).
+Verify the signature with the public key and confirm success.
+"""
+
+import os
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import padding
+
+BASE_DIR    = os.path.join(os.path.dirname(__file__), "..")
+MSG_PATH    = os.path.join(BASE_DIR, "messages", "message1.txt")
+SIG_PATH    = os.path.join(BASE_DIR, "message1.sig")
+PRIV_PATH   = os.path.join(BASE_DIR, "private_key.pem")
+PUB_PATH    = os.path.join(BASE_DIR, "public_key.pem")
+
+
+def load_private_key(path: str):
+    with open(path, "rb") as f:
+        return serialization.load_pem_private_key(f.read(), password=None)
+
+
+def load_public_key(path: str):
+    with open(path, "rb") as f:
+        return serialization.load_pem_public_key(f.read())
+
+
+def sign_message(private_key, message: bytes) -> bytes:
+    return private_key.sign(
+        message,
+        padding.PSS(
+            mgf=padding.MGF1(hashes.SHA256()),
+            salt_length=padding.PSS.MAX_LENGTH,
+        ),
+        hashes.SHA256(),
+    )
+
+
+def verify_signature(public_key, message: bytes, signature: bytes) -> bool:
+    try:
+        public_key.verify(
+            signature,
+            message,
+            padding.PSS(
+                mgf=padding.MGF1(hashes.SHA256()),
+                salt_length=padding.PSS.MAX_LENGTH,
+            ),
+            hashes.SHA256(),
+        )
+        return True
+    except Exception:
+        return False
+
+
+def main():
+    private_key = load_private_key(PRIV_PATH)
+    public_key  = load_public_key(PUB_PATH)
+
+    with open(MSG_PATH, "rb") as f:
+        message = f.read()
+
+    signature = sign_message(private_key, message)
+
+    with open(SIG_PATH, "wb") as f:
+        f.write(signature)
+
+    is_valid = verify_signature(public_key, message, signature)
+
+    print("=== Task 3: Signing and Verification ===\n")
+    print(f"Message           : {message.decode().strip()}")
+    print(f"Signature (hex)   : {signature.hex()[:64]}...")
+    print(f"Signature saved   : {SIG_PATH}")
+    print(f"Verification      : {'VALID' if is_valid else 'INVALID'}")
+
+
+if __name__ == "__main__":
+    main()
 ```
 
 ### Output Evidence
 
-> **[INSERT SCREENSHOT HERE — task3_sign_output.png]**
-> Show: script output displaying the signature (hex) and confirmation of signing.
-
-> **[INSERT SCREENSHOT HERE — task3_verify_success.png]**
-> Show: verification output confirming "Signature is VALID."
+![alt text](task3.png)
 
 ### Recorded Signature
 
@@ -212,16 +388,16 @@ Sign a message using the RSA private key and verify the signature using the corr
 |------|-------|
 | Message file | message1.txt |
 | Signature file | message1.sig |
-| Signature (hex, first 32 bytes) | [INSERT] |
-| Verification result | [INSERT — e.g., VALID] |
+| Signature (hex, first 32 bytes) | See screenshot |
+| Verification result | VALID |
 
 ### Explanation
 
-**What was done:** [EXPLAIN HERE — describe the signing and verification steps.]
+**What was done:** The script loaded the private key from `private_key.pem` and read the raw bytes of `message1.txt`. It then called `private_key.sign()` using RSA-PSS padding with SHA-256 as both the message digest and the MGF1 mask generation hash. The resulting 256-byte binary signature was written to `message1.sig`. The public key was then used to verify the signature against the original message bytes, and the result was printed to the terminal.
 
-**What happened:** [EXPLAIN HERE — describe the output and verification result.]
+**What happened:** The verification returned `VALID`, confirming that the signature produced by the private key is mathematically consistent with the public key and the exact bytes of `message1.txt`. The signature itself is 256 bytes of binary data (2048-bit RSA output), displayed as a 512-character hex string in the terminal.
 
-**Why it matters:** [EXPLAIN HERE — explain the asymmetric property: only the private key can sign, but anyone with the public key can verify. Discuss non-repudiation.]
+**Why it matters:** This task demonstrates all three core properties of a digital signature. **Authenticity** — only someone holding the private key could have produced that signature. **Integrity** — the signature is cryptographically bound to the exact byte contents of the message; any alteration will break it. **Non-repudiation** — the signer cannot later deny having signed, because the valid signature can only have originated from their private key. RSA-PSS is used rather than plain RSA because it incorporates randomized salt and a proof of security under the random oracle model, making it resistant to padding oracle attacks that affect deterministic schemes like PKCS#1 v1.5.
 
 ---
 
@@ -241,36 +417,76 @@ Modify the signed message and attempt to verify the original signature, demonstr
 ### Commands / Code Used
 
 ```bash
-# [INSERT COMMANDS HERE — e.g., nano message1.txt, python3 task4_message_tamper.py]
+# Run the tampering script (original message1.txt is NOT modified on disk;
+# the script injects tampered content in memory for each attempt)
+python3 code/task4_message_tamper.py
 ```
 
 ```python
-# [CODE HERE — task4_message_tamper.py]
+"""
+Task 4 – Message Tampering
+Modify message1.txt and attempt to verify the original signature.
+Demonstrates that any change to the message invalidates the signature.
+"""
+
+import os
+from task3_sign_verify import load_public_key, verify_signature
+
+BASE_DIR  = os.path.join(os.path.dirname(__file__), "..")
+MSG_PATH  = os.path.join(BASE_DIR, "messages", "message1.txt")
+SIG_PATH  = os.path.join(BASE_DIR, "message1.sig")
+PUB_PATH  = os.path.join(BASE_DIR, "public_key.pem")
+
+TAMPERING_ATTEMPTS = [
+    b"Authorize transfer of $9000 to Eve's account ending in 0000.\n",
+    b"Authorize transfer of $500 to Bob's account ending in 4821. URGENT.\n",
+    b"Revoke all access permissions immediately.\n",
+]
+
+
+def main():
+    public_key = load_public_key(PUB_PATH)
+
+    with open(SIG_PATH, "rb") as f:
+        original_signature = f.read()
+
+    with open(MSG_PATH, "rb") as f:
+        original_message = f.read()
+
+    print("=== Task 4: Message Tampering ===\n")
+    print(f"Original message  : {original_message.decode().strip()}")
+    print(f"Original sig valid: {verify_signature(public_key, original_message, original_signature)}\n")
+    print("-" * 60)
+
+    for i, tampered_message in enumerate(TAMPERING_ATTEMPTS, start=1):
+        result = verify_signature(public_key, tampered_message, original_signature)
+        print(f"Attempt {i}: {tampered_message.decode().strip()}")
+        print(f"  Verification: {'VALID' if result else 'INVALID'}\n")
+
+
+if __name__ == "__main__":
+    main()
 ```
 
 ### Output Evidence
 
-> **[INSERT SCREENSHOT HERE — task4_modified_message.png]**
-> Show: the modified message content via `cat message1.txt`.
-
-> **[INSERT SCREENSHOT HERE — task4_verify_fail.png]**
-> Show: script output displaying "Signature is INVALID" or the caught `InvalidSignature` error.
+![alt text](task4.png)
 
 ### Tampering Results
 
 | Attempt | Modification Made | Verification Result |
 |---------|------------------|-------------------|
-| 1 | [DESCRIBE CHANGE] | [INSERT — INVALID] |
-| 2 | [DESCRIBE CHANGE] | [INSERT — INVALID] |
-| 3 | [DESCRIBE CHANGE] | [INSERT — INVALID] |
+| 1 | Changed amount from $500 to $9000 and recipient to Eve | INVALID |
+| 2 | Appended " URGENT." to the original transfer line | INVALID |
+| 3 | Replaced entire message with an access revocation command | INVALID |
 
 ### Explanation
 
-**What was done:** [EXPLAIN HERE — describe what modifications were made to the message.]
+**What was done:** Rather than manually editing the file on disk, the script holds the original `message1.sig` signature and tests it against three programmatically crafted tampered messages. The first simulates a financial fraud (amount and account changed), the second simulates a minor word addition, and the third replaces the message entirely — covering a range of tampering severities.
 
-**What happened:** [EXPLAIN HERE — describe the verification failure and the exception raised.]
+**What happened:** All three verification attempts returned `INVALID`. The `cryptography` library's `verify()` method raised an `InvalidSignature` exception internally for each tampered message, which the `verify_signature` helper caught and translated into `False`. Not a single tampered byte went undetected.
 
-**Why it matters:** [EXPLAIN HERE — explain how the signature binds to the exact message bytes and why any change invalidates it. Connect to integrity protection.]
+**Why it matters:** RSA-PSS signs the SHA-256 hash of the message, not the message itself. SHA-256 has the avalanche effect: even changing one character in the input produces a completely different 256-bit digest. Since the stored signature was computed over the original digest, it cannot match the new digest produced from any tampered version. This means an adversary who intercepts a signed financial instruction and alters the amount or recipient will be caught immediately upon verification — the signature serves as a tamper-evident seal over the entire message content.
 
 ---
 
@@ -290,7 +506,7 @@ Modify the signature itself (leaving the message intact) and attempt verificatio
 ### Commands / Code Used
 
 ```bash
-python3 task5_sig_tamper.py
+python3 code/task5_sig_tamper.py
 ```
 
 ```python
@@ -329,8 +545,8 @@ def main():
         tampered = tamper_signature(original_sig, index, mask)
         result   = verify_signature(public_key, message, tampered)
         print(f"Attempt {i}: flip byte[{index}] XOR 0x{mask:02X}")
-        print(f"  Verification: {'VALID' if result else 'INVALID'}\n")```
-
+        print(f"  Verification: {'VALID' if result else 'INVALID'}\n")
+```
 ### Output Evidence
 
 ![task5](task5.png)
@@ -339,18 +555,18 @@ def main():
 
 | Byte Index Modified | XOR Mask | Verification Result |
 |--------------------|----------|-------------------|
-| [INSERT] | [INSERT] | [INSERT — INVALID] |
-| [INSERT] | [INSERT] | [INSERT — INVALID] |
-| [INSERT] | [INSERT] | [INSERT — INVALID] |
+| 0 | 0xFF | INVALID |
+| 8 | 0x01 | INVALID |
+| 127 | 0xAB | INVALID |
 
 ### Explanation
 
-**What was done:** [EXPLAIN HERE — describe which bytes of the signature were flipped and how.]
+**What was done:** The script loaded the valid `message1.sig` produced in Task 3 and applied XOR bit-flips to three different byte positions: byte 0 (XOR `0xFF`, flipping all 8 bits), byte 8 (XOR `0x01`, flipping just the least significant bit), and byte 127 (XOR `0xAB`, flipping multiple non-contiguous bits). Each tampered signature was then passed to the verifier alongside the original, unmodified `message1.txt`.
 
-**What happened:** [EXPLAIN HERE — describe the verification failure.]
+**What happened:** All three tampered signatures returned `INVALID`. Even the smallest possible modification — flipping a single bit at byte 8 with mask `0x01` — was enough to cause verification to fail. The RSA-PSS verification algorithm detected that the signature no longer corresponded to the message and raised an `InvalidSignature` exception internally.
 
-**Why it matters:** [EXPLAIN HERE — explain that both the message and the signature are integrity-protected; an adversary cannot alter either without detection.]
-```
+**Why it matters:** This confirms that the signature blob itself is integrity-protected, not just the message. An attacker who intercepts a signed document cannot alter either half of the (message, signature) pair without invalidating the whole thing. Flipping even one bit in a 256-byte RSA signature destroys the mathematical relationship that verification relies on, because the entire recovered value shifts away from the expected hash. Together with Task 4, this demonstrates that digital signatures provide end-to-end tamper evidence over both the content and the authenticator.
+
 ---
 
 ## Task 6 – Public Key Trust <a name="task-6"></a>
@@ -369,36 +585,89 @@ Demonstrate why public key authenticity matters by showing that verifying a vali
 ### Commands / Code Used
 
 ```bash
-# [INSERT COMMANDS HERE]
+# Run the public key trust demonstration
+python3 code/task6_pubkey_trust.py
 ```
 
 ```python
-# [CODE HERE — task6_pubkey_trust.py]
+"""
+Task 6 – Public Key Trust
+Generate a second "attacker" key pair and demonstrate:
+  1. Original signature fails when verified with the attacker's public key.
+  2. Attacker's own signature verifies with their own public key (substitution scenario).
+Shows why public key authenticity is essential.
+"""
+
+import os
+from task2_keygen import generate_rsa_keypair
+from task3_sign_verify import (
+    load_private_key, load_public_key,
+    sign_message, verify_signature,
+)
+
+BASE_DIR  = os.path.join(os.path.dirname(__file__), "..")
+MSG_PATH  = os.path.join(BASE_DIR, "messages", "message1.txt")
+SIG_PATH  = os.path.join(BASE_DIR, "message1.sig")
+PUB_PATH  = os.path.join(BASE_DIR, "public_key.pem")
+PRIV_PATH = os.path.join(BASE_DIR, "private_key.pem")
+
+
+def main():
+    # Load original keys and signature
+    original_priv = load_private_key(PRIV_PATH)
+    original_pub  = load_public_key(PUB_PATH)
+
+    with open(MSG_PATH, "rb") as f:
+        message = f.read()
+
+    with open(SIG_PATH, "rb") as f:
+        original_sig = f.read()
+
+    # Generate attacker key pair (in memory only)
+    attacker_priv, attacker_pub = generate_rsa_keypair()
+    attacker_sig = sign_message(attacker_priv, message)
+
+    print("=== Task 6: Public Key Trust ===\n")
+
+    # Scenario 1: Correct key pair
+    result1 = verify_signature(original_pub, message, original_sig)
+    print(f"Scenario 1 – Legitimate (original sig + original pub key): {'VALID' if result1 else 'INVALID'}")
+
+    # Scenario 2: Wrong public key
+    result2 = verify_signature(attacker_pub, message, original_sig)
+    print(f"Scenario 2 – Original sig verified with ATTACKER public key: {'VALID' if result2 else 'INVALID'}")
+
+    # Scenario 3: Attacker signs with their own key → verifies with their own key
+    result3 = verify_signature(attacker_pub, message, attacker_sig)
+    print(f"Scenario 3 – Attacker sig verified with attacker public key: {'VALID' if result3 else 'INVALID'}")
+
+    print("\nConclusion: if Alice accepts any public key without verification,")
+    print("an attacker can substitute their own key pair and forge valid signatures.")
+
+
+if __name__ == "__main__":
+    main()
 ```
 
 ### Output Evidence
 
-> **[INSERT SCREENSHOT HERE — task6_wrong_key_fail.png]**
-> Show: verification failure when the wrong public key is used.
-
-> **[INSERT SCREENSHOT HERE — task6_substitution.png]**
-> Show: attacker's signature verifying with attacker's public key (key substitution scenario).
+![Task6 Output](task6.png)
 
 ### Trust Scenarios
 
 | Scenario | Key Used to Sign | Key Used to Verify | Result |
 |----------|-----------------|-------------------|--------|
-| Legitimate | Original private | Original public | [INSERT] |
-| Wrong key | Original private | Attacker public | [INSERT] |
-| Substitution | Attacker private | Attacker public | [INSERT] |
+| Legitimate | Original private | Original public | VALID |
+| Wrong key | Original private | Attacker public | INVALID |
+| Substitution | Attacker private | Attacker public | VALID |
 
 ### Explanation
 
-**What was done:** [EXPLAIN HERE — describe the key substitution experiment.]
+**What was done:** The script loaded the original private/public key pair and the `message1.sig` signature from Task 3. It then generated a fresh, independent attacker RSA key pair entirely in memory (never written to disk). Using the attacker's private key, it produced a second signature over the same message. All three verification scenarios were then run and printed.
 
-**What happened:** [EXPLAIN HERE — describe each scenario's verification result.]
+**What happened:** Scenario 1 returned `VALID` — confirming the baseline still holds. Scenario 2 returned `INVALID` — the original signature cryptographically cannot verify under a different public key, because RSA verification essentially "decrypts" the signature using the public key and checks the recovered hash; a mismatched key produces garbage, not the expected digest. Scenario 3 returned `VALID` — the attacker's signature verifies perfectly under the attacker's own public key, showing that the signature scheme itself cannot detect key substitution.
 
-**Why it matters:** [EXPLAIN HERE — explain the role of a Public Key Infrastructure (PKI) or certificate authority (CA) in binding public keys to identities. Discuss why simply having a valid signature is insufficient without trusted key distribution.]
+**Why it matters:** The mathematical correctness of a signature only proves that the message was signed by whoever holds the private key corresponding to the verifier's copy of the public key. If the verifier cannot confirm that the public key genuinely belongs to the expected identity, an attacker can substitute their own key pair and produce a signature that passes verification — even though the victim never signed anything. This is exactly the attack that a **Public Key Infrastructure (PKI)** and **Certificate Authorities (CAs)** exist to prevent: a CA-issued certificate cryptographically binds a public key to an identity, so verifiers can trust whose key they are actually using before accepting any signature.
 
 ---
 
@@ -418,7 +687,7 @@ Implement textbook (plain) RSA signing in Python using raw modular exponentiatio
 ### Commands / Code Used
 
 ```bash
-python3 raw_rsa_demo.py
+python3 code/task7_plain_rsa.py
 ```
 
 ```python
@@ -478,7 +747,7 @@ print("Valid? (Does check == m?)" , check == m)
 
 ### Explanation
 
-**What was done:** As seen in the screenshot output, taking the signature (2557) and applying the verification math (2557 17(mod 3233)) results in exactly 42 this exactly matches the original message.
+**What was done:** As seen in the screenshot output, taking the signature (2577) and applying the verification math (2577^17 mod 3233) results in exactly 42, which exactly matches the original message.
 
 **What happened:** It works due to Euler's Totient Theorem so, this means that e and d are mathematical inverses modulo ϕ(N) and applying them sequentially causes them to cancel each other out. Therefore, (m^d)^e ≡ m^(ed) ≡ m^1 ≡ m(modN).
 
@@ -503,7 +772,7 @@ Demonstrate an existential forgery attack against plain (unpadded) RSA, showing 
 ### Commands / Code Used
 
 ```bash
-python3 raw_rsa_forgery.py
+python3 code/task8_rsa_forgery.py
 ```
 
 ```python
@@ -591,7 +860,7 @@ Implement the secure hash-then-sign construction (RSA-PSS with SHA-256) and conf
 ### Commands / Code Used
 
 ```bash
-python3 hash_then_sign_demo.py
+python3 code/task9_hash_then_sign.py
 ```
 
 ```python
@@ -689,7 +958,7 @@ Demonstrate that a digital signature scheme is only as secure as the underlying 
 ### Commands / Code Used
 
 ```bash
-python3 weak_hash_signature_demo.py
+python3 code/task10_weak_hash.py
 ```
 
 ```python
