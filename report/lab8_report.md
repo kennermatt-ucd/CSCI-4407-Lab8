@@ -350,7 +350,7 @@ def main():
 **What happened:** [EXPLAIN HERE — describe the verification failure.]
 
 **Why it matters:** [EXPLAIN HERE — explain that both the message and the signature are integrity-protected; an adversary cannot alter either without detection.]
-
+```
 ---
 
 ## Task 6 – Public Key Trust <a name="task-6"></a>
@@ -418,36 +418,71 @@ Implement textbook (plain) RSA signing in Python using raw modular exponentiatio
 ### Commands / Code Used
 
 ```bash
-# [INSERT COMMANDS HERE — e.g., python3 task7_plain_rsa.py]
+python3 raw_rsa_demo.py
 ```
 
 ```python
-# [CODE HERE — task7_plain_rsa.py]
+def egcd(a, b):
+    if a == 0:
+        return (b, 0, 1)
+    g, y, x = egcd(b % a, a)
+    return (g, x - (b // a) * y, y)
+
+def modinv(a, m):
+    g, x, y = egcd(a, m)
+    if g != 1:
+        raise Exception("No modular inverse")
+    return x % m
+
+#Toy RSA Parameters
+p = 61
+q = 53
+N = p * q                #3233
+phi = (p - 1) * (q - 1)  #3120
+e = 17                   #Public Exponent
+d = modinv(e, phi)       #Private Exponent (2753)
+
+#Message that will be signed
+m = 42
+
+#Signing (Using Private Key 'd')
+sigma = pow(m, d, N)
+
+#Verification (Using Public Key 'e')
+check = pow(sigma, e, N)
+
+print("--- Task 7: Plain RSA Signature Intuition ---")
+print("N =", N)
+print("e =", e)
+print("d =", d)
+print("Message representative m =", m)
+print("Signature sigma =", sigma)
+print("Verification result =", check)
+print("Valid? (Does check == m?)" , check == m)
 ```
 
 ### Output Evidence
 
-> **[INSERT SCREENSHOT HERE — task7_plain_rsa_output.png]**
-> Show: script output with key components (n, e, d — or partial), computed signature integer, and verification result.
+![Task7 Output](task7.png)
 
 ### Recorded Values
 
 | Parameter | Value (truncated) |
 |-----------|------------------|
-| Modulus n (first 20 digits) | [INSERT] |
-| Public exponent e | [INSERT] |
-| Message integer M | [INSERT] |
-| Signature integer S (first 20 digits) | [INSERT] |
-| Recovered M' | [INSERT] |
-| Match? | [INSERT — Yes/No] |
+| Modulus n | 3233 |
+| Public exponent e | 17 |
+| Message integer M | 42 |
+| Signature integer S | 2577 |
+| Recovered M' | 42 |
+| Match? | Yes |
 
 ### Explanation
 
-**What was done:** [EXPLAIN HERE — describe the raw RSA operations performed.]
+**What was done:** As seen in the screenshot output, taking the signature (2557) and applying the verification math (2557 17(mod 3233)) results in exactly 42 this exactly matches the original message.
 
-**What happened:** [EXPLAIN HERE — describe the output and whether M' matched M.]
+**What happened:** It works due to Euler's Totient Theorem so, this means that e and d are mathematical inverses modulo ϕ(N) and applying them sequentially causes them to cancel each other out. Therefore, (m^d)^e ≡ m^(ed) ≡ m^1 ≡ m(modN).
 
-**Why it matters:** [EXPLAIN HERE — explain that plain RSA without hashing or padding is deterministic and homomorphic, which enables forgery attacks. This motivates Tasks 8 and 9.]
+**Why it matters:** Mathematical correctness only proves that the math is functioning properly, it cannot prove any form cryptographic security. Plain RSA signatures are structurally insecure because they possess a multiplicative property that allows attackers to easily forge signatures on new messages without needing access to a private key.
 
 ---
 
@@ -468,34 +503,74 @@ Demonstrate an existential forgery attack against plain (unpadded) RSA, showing 
 ### Commands / Code Used
 
 ```bash
-# [INSERT COMMANDS HERE — e.g., python3 task8_rsa_forgery.py]
+python3 raw_rsa_forgery.py
 ```
 
 ```python
-# [CODE HERE — task8_rsa_forgery.py]
+def egcd(a, b):
+    if a == 0:
+        return (b, 0, 1)
+    g, y, x = egcd(b % a, a)
+    return (g, x - (b // a) * y, y)
+
+def modinv(a, m):
+    g, x, y = egcd(a, m)
+    if g != 1:
+        raise Exception("No modular inverse")
+    return x % m
+
+#Toy RSA Parameters
+p = 61
+q = 53
+N = p * q
+phi = (p - 1) * (q - 1)
+e = 17
+d = modinv(e, phi)
+
+#Two previously signed messages
+m1 = 7
+m2 = 9
+s1 = pow(m1, d, N) #Signature 1
+s2 = pow(m2, d, N) #Signature 2
+
+#Forgery
+#We as an attacker want to forge a signature for m3 (m1 * m2)
+m3 = (m1 * m2) % N
+
+s3 = (s1 * s2) % N
+
+#Verification
+check = pow(s3, e, N)
+
+print("--- Task 8: Raw RSA Forgery Experiment ---")
+print("m1 =", m1)
+print("m2 =", m2)
+print("m3 = m1*m2 mod N =", m3)
+print("s1 (Valid Sig for m1) =", s1)
+print("s2 (Valid Sig for m2) =", s2)
+print("Forged-style signature s3 = s1*s2 mod N =", s3)
+print("Verification of s3 gives =", check)
+print("Does it verify as m3?", check == m3)
 ```
 
 ### Output Evidence
 
-> **[INSERT SCREENSHOT HERE — task8_forgery_output.png]**
-> Show: forged signature integer, the derived "message," and the verification result confirming the forgery passes.
+![Task8 Output](Task8.png)
 
 ### Forgery Results
 
 | Item | Value |
 |------|-------|
-| Chosen signature S | [INSERT] |
-| Derived message M = S^e mod n | [INSERT — partial] |
-| Forgery passes verification? | [INSERT — Yes/No] |
-| Is M a meaningful message? | [INSERT — discuss] |
+| Chosen signature S | 1723 |
+| Derived message M = S^e mod n | 63 |
+| Forgery passes verification? | Yes |
+| Is M a meaningful message? | No, it is just the mathematical product of the two previous messages. |
 
 ### Explanation
 
-**What was done:** [EXPLAIN HERE — describe the existential forgery construction.]
+**RSA Signature Shorcomings:** Raw RSA signatures are homomorphic with respect the multiplication used, this means that the math proves that (m1^d ⋅ m2^d)(modN) is exactly equal to(m1⋅m2)^d (modN). Therefore, an attacker can simply multiply two valid signatures they have intercepted to create a new valid forged signature for a completely different message (m3), without even knowing the private key.
 
-**What happened:** [EXPLAIN HERE — explain how the pair (M, S) was created and that it verifies correctly.]
-
-**Why it matters:** [EXPLAIN HERE — explain that plain RSA is malleable: given (M₁, S₁) and (M₂, S₂), an attacker can construct a valid signature for M₁·M₂ mod n. This demonstrates why real RSA signatures always use a hash function and padding (e.g., PKCS#1 v1.5 or PSS).]
+**How we relate unforgeability:** The core requirement of a secure digital signature (Unforgeability under Chosen Message Attack) is that an adversary cannot produce a valid signature for a message that was never signed by the owner. Because an attacker can trivially compute a valid signature for m3​ just by observing the signatures for m1 and m2​, plain RSA completely fails the UF-CMA security requirements to be considered secure.
 
 ---
 
@@ -516,37 +591,84 @@ Implement the secure hash-then-sign construction (RSA-PSS with SHA-256) and conf
 ### Commands / Code Used
 
 ```bash
-# [INSERT COMMANDS HERE — e.g., python3 task9_hash_then_sign.py]
+python3 hash_then_sign_demo.py
 ```
 
 ```python
-# [CODE HERE — task9_hash_then_sign.py]
+import hashlib
+
+def egcd(a, b):
+    if a == 0:
+        return (b, 0, 1)
+    g, y, x = egcd(b % a, a)
+    return (g, x - (b // a) * y, y)
+
+def modinv(a, m):
+    g, x, y = egcd(a, m)
+    if g != 1:
+        raise Exception("No modular inverse")
+    return x % m
+
+#Toy RSA Parameters
+p = 61
+q = 53
+N = p * q
+phi = (p - 1) * (q - 1)
+e = 17
+d = modinv(e, phi)
+
+print("--- Task 9: Hash-then-Sign Workflow ---")
+
+#Hashing the Message
+message = b"Authorize transfer of 100 dollars to Bob."
+print(f"Original Message: '{message.decode()}'")
+
+digest = hashlib.sha256(message).digest()
+
+#Converts the binary hash into an integer so that the RSA math can work on it
+h = int.from_bytes(digest, byteorder="big") % N
+print("Hash representative h =", h)
+
+#Signing the Hash
+#We apply the private key 'd' to the hash instead of the message itself
+sigma = pow(h, d, N)
+print("Signature sigma =", sigma)
+
+#We perform Verification
+check = pow(sigma, e, N)
+print("Recovered verification value =", check)
+print("Valid? (Does recovered value == original hash?)", check == h)
+
+print("\n--- Tampering (For ease of demonstration) ---")
+#Modifing the message slightly
+tampered_message = b"Authorize transfer of 900 dollars to Bob."
+print(f"Tampered Message: '{tampered_message.decode()}'")
+
+tampered_digest = hashlib.sha256(tampered_message).digest()
+tampered_h = int.from_bytes(tampered_digest, byteorder="big") % N
+
+print("New Hash representative h =", tampered_h)
+print("Does the old signature still verify? (Does recovered value == new hash?)", check == tampered_h)
 ```
 
 ### Output Evidence
 
-> **[INSERT SCREENSHOT HERE — task9_sign_output.png]**
-> Show: computed SHA-256 hash, RSA-PSS signature (hex), and verification result.
-
-> **[INSERT SCREENSHOT HERE — task9_forgery_fail.png]**
-> Show: the Task 8 forgery technique failing against hash-then-sign (InvalidSignature or equivalent).
+![Task9 Output](task9.png)
 
 ### Results
 
 | Step | Value / Result |
 |------|---------------|
-| SHA-256 hash of message | [INSERT] |
-| Signature (hex, first 32 bytes) | [INSERT] |
-| Verification result | [INSERT — VALID] |
-| Forgery attempt result | [INSERT — INVALID / rejected] |
+| SHA-256 hash of message | 1505 |
+| Signature (hex, first 32 bytes) | 3052 |
+| Verification result | Valid |
+| Forgery attempt result | Failed |
 
 ### Explanation
 
-**What was done:** [EXPLAIN HERE — describe the hash-then-sign construction and why hashing is applied first.]
+**Why the signature no longer matches:** When the message was changed from 100 to 900 dollars, the SHA-256 hash function generated a completely different hash. And since the verification process checks if the signature matches the current hash of the document it means that the old signature will mathematically fail to match the new hash, exposing any form of tampering with the message.
 
-**What happened:** [EXPLAIN HERE — describe the successful signing/verification and the forgery failure.]
-
-**Why it matters:** [EXPLAIN HERE — explain that hashing removes the homomorphic structure exploited in Task 8. Discuss PSS padding and how it adds randomness to prevent deterministic attacks. Connect to the EU-CMA security model.]
+**Why hashing helps:** RSA math only works on integers smaller than the modulus (N) so, without hashing a 10MB PDF document could not be signed using a 2048 bit RSA key. A cryptographic hash function perfectly compresses any arbitrary length file into a fixed size integer, allowing the RSA math to process it efficiently while securely binding the signature to the document. Importantly, hashing also destroys the mathematical structure of the message and this prevents multiplicative forgery attacks as demonstrated in Task 8.
 
 ---
 
@@ -567,219 +689,72 @@ Demonstrate that a digital signature scheme is only as secure as the underlying 
 ### Commands / Code Used
 
 ```bash
-# [INSERT COMMANDS HERE — e.g., python3 task10_weak_hash.py]
+python3 weak_hash_signature_demo.py
 ```
 
 ```python
-# [CODE HERE — task10_weak_hash.py]
+print("--- Task 10: Weak Hash Function Collision ---")
+
+def weak_hash(msg):
+    return sum(msg) % 100
+
+m1 = b"Pay Bob 100"
+
+m2 = b"Pay obB 010" 
+
+h1 = weak_hash(m1)
+h2 = weak_hash(m2)
+
+print("m1 =", m1.decode())
+print("m2 =", m2.decode())
+print("weak_hash(m1) =", h1)
+print("weak_hash(m2) =", h2)
+
+if h1 == h2:
+    print("\nCollision found: A signature generated for 'm1' would perfectly verify for 'm2'!")
+else:
+    print("\nNo collision for this pair. Try other messages.")
 ```
 
 ### Output Evidence
 
-> **[INSERT SCREENSHOT HERE — task10_collision.png]**
-> Show: both messages, their weak hash values (confirming they match), the signature, and verification passing for the second message.
-
-> **[INSERT SCREENSHOT HERE — task10_sha256_no_collision.png]**
-> Show: SHA-256 hashes of the same two messages confirming they differ (no collision).
+![Task10 Output](task10.png)
 
 ### Collision Evidence
 
 | Item | Value |
 |------|-------|
-| Message A | [INSERT] |
-| Message B | [INSERT] |
-| Weak hash of A | [INSERT] |
-| Weak hash of B | [INSERT — must equal A's hash] |
-| Signature computed for A | [INSERT — partial] |
-| Signature verifies for B? | [INSERT — Yes, demonstrating attack] |
-| SHA-256 of A | [INSERT] |
-| SHA-256 of B | [INSERT — different from A's] |
+| Message A | Pay Bob 100 |
+| Message B | Pay obB 010 |
+| Weak hash of A | 82 |
+| Weak hash of B | 82 |
 
 ### Explanation
 
-**What was done:** [EXPLAIN HERE — describe the weak hash function used and how the collision was found.]
+**Why collision breaks trust:** In the hash-then-sign workflow demonstrated, the digital signature is mathematically bound to the hash value and is not bound the message itself. If an attacker can find a collision between two different messages that can produce the exact same hash, then they can take the original message and pull what data is needed. The attacker can then detach that valid signature and attach it to their malicious message (m2). Due to the fact that H(m1) = H(m2), the verification algorithm will accept the forged document as mathematically authentic.
 
-**What happened:** [EXPLAIN HERE — explain that the signature for message A was accepted as valid for message B because they share the same hash.]
-
-**Why it matters:** [EXPLAIN HERE — explain collision resistance as a required property for hash-then-sign security. Discuss why MD5 and SHA-1 are deprecated for signatures, and why SHA-256 or stronger is required. Connect to real-world attacks (e.g., chosen-prefix collisions).]
-
+**Collision resistant hash functions:** To prevent the attack described above, it must be computationally impossible for an attacker to find two inputs that hash to the same output. Functions like SHA-256 are used in real-world systems because they guarantee strong collision resistance, ensuring a signature can uniquely be tied to only one specific document.
 ---
 
-## Task 11 – Comparison and Reflection <a name="task-11"></a>
+## Task 11 – Comparison and Reflection
 
 ### Objective
 
 Synthesize all experimental results into a structured comparison table and reflection, clearly articulating the security properties and limitations of each approach explored in this lab.
 
 ### Comparison Table
-
-| Scheme | Confidentiality | Integrity | Non-Repudiation | Forgery Resistant | Notes |
-|--------|----------------|-----------|-----------------|-------------------|-------|
-| Plain RSA (no hash) | | | | | |
-| Plain RSA (existential forgery) | | | | | |
-| Hash-then-Sign (weak hash) | | | | | |
-| Hash-then-Sign (SHA-256, PSS) | | | | | |
-| Signature + PKI / CA | | | | | |
-
-> Fill in each cell with: **Yes**, **No**, **Partial**, or **Conditional** — then add a brief note.
+| Method | Works Correctly? | Secure? | Main Weakness / Main Strength |
+| :--- | :--- | :--- | :--- |
+| **1. OpenSSL-based structured RSA** (Tasks 1-6) | Yes | **Yes** | **Strength:** Reflects realistic practice. Uses secure padding, collision-resistant hashing (SHA-256), and proper key sizes. |
+| **2. Toy plain RSA signature intuition** (Task 7) | Yes | No | **Weakness:** Only educational. Uses insecurely small keys and lacks padding/hashing. |
+| **3. Toy raw RSA forgery experiment** (Task 8) | Yes | No | **Weakness:** Demonstrates severe structural vulnerability (multiplicative homomorphism) allowing trivial forgery without the private key. |
+| **4. Toy hash-then-sign RSA** (Task 9) | Yes | No | **Strength:** Solves the raw RSA forgery issue and handles arbitrary lengths. **Weakness:** Still uses toy key sizes, making it insecure in practice. |
+| **5. Weak-hash signing thought experiment** (Task 10)| Yes | No | **Weakness:** Exposes how a lack of collision resistance allows an attacker to reuse a signature on a forged, malicious document. |
 
 ---
 
-### Reflection Questions
+### Reflection
 
-**1. Why does a digital signature provide non-repudiation when a MAC does not?**
-
-[EXPLAIN HERE]
+Digital signatures provide three vital security guarantees, authentication, integrity, and non-repudiation. Through this lab, we saw that while the basic RSA math is efficient and elegant in its operation, plain RSA signing is fundamentally insecure because its multiplicative property allows attackers to forge valid signatures without possessing the private key. Hashing the message prior to signing is necessary for not only compressing the files used into manageable sizes for the RSA arithmetic, but also to destroy the mathematical structure that enables those forgery attacks in the first place. However, the choice of hash function is the most important aspect, as if it lacks collision resistance an attacker could attach a legitimate signature to a forged document and get away with it. Finally, the OpenSSL tasks demonstrated that even mathematically perfect signatures are useless if the verifier cannot trust the public key. As a signature is only meaningful relative to a specific public key that it is used with, undermining the absolute necessity of authenticating our public keys via trusted certificates before verifying any of the data.
 
 ---
-
-**2. What is the EU-CMA (Existential Unforgeability under Chosen Message Attack) security model, and which scheme in this lab achieves it?**
-
-[EXPLAIN HERE]
-
----
-
-**3. Why is plain RSA without hashing insecure, even if the private key is never exposed?**
-
-[EXPLAIN HERE]
-
----
-
-**4. Why must the hash function used in hash-then-sign be collision-resistant?**
-
-[EXPLAIN HERE]
-
----
-
-**5. What role does public key trust (PKI / certificate authorities) play in making digital signatures useful in practice?**
-
-[EXPLAIN HERE]
-
----
-
-**6. What is the key takeaway from comparing MAC-based authentication (Lab 5) with digital signatures (this lab)?**
-
-[EXPLAIN HERE]
-
----
-
-## Conclusion
-
-[WRITE CONCLUSION HERE — summarize the lab's key findings across all 11 tasks. Cover: the role of RSA key pairs in signing/verification, why plain RSA is insecure, how hash-then-sign achieves EU-CMA security, the importance of collision-resistant hash functions, and the necessity of public key infrastructure for real-world deployments.]
-
----
-
-## Appendix – Python Scripts <a name="appendix"></a>
-
-### A. task1_setup.py
-
-```python
-# [CODE HERE]
-```
-
-### B. task2_rsa_keygen.py
-
-```python
-# [CODE HERE]
-```
-
-### C. task3_sign_verify.py
-
-```python
-# [CODE HERE]
-```
-
-### D. task4_message_tamper.py
-
-```python
-# [CODE HERE]
-```
-
-### E. task5_sig_tamper.py
-
-```python
-# [CODE HERE]
-```
-
-### F. task6_pubkey_trust.py
-
-```python
-# [CODE HERE]
-```
-
-### G. task7_plain_rsa.py
-
-```python
-# [CODE HERE]
-```
-
-### H. task8_rsa_forgery.py
-
-```python
-# [CODE HERE]
-```
-
-### I. task9_hash_then_sign.py
-
-```python
-# [CODE HERE]
-```
-
-### J. task10_weak_hash.py
-
-```python
-# [CODE HERE]
-```
-
----
-
-## Pre-Submission Checklist <a name="checklist"></a>
-
-Use this checklist before exporting to PDF.
-
-### Placeholders Cleared
-
-- [ ] Submission date filled in
-- [ ] All `[INSERT HASH]` replaced with actual SHA-256 values
-- [ ] All `[INSERT]` cells in tables filled in
-- [ ] All `[EXPLAIN HERE]` and `[WRITE CONCLUSION HERE]` sections written
-- [ ] All `[CODE HERE]` blocks replaced with actual script contents
-- [ ] All `[DESCRIBE CHANGE]` rows in tampering tables filled in
-- [ ] Comparison table (Task 11) fully filled in with Yes/No/Partial
-- [ ] All reflection questions answered
-
-### Screenshots Present
-
-- [ ] task1_directory_setup.png
-- [ ] task1_hashes.png
-- [ ] task2_keygen_output.png
-- [ ] task2_private_pem.png
-- [ ] task2_public_pem.png
-- [ ] task3_sign_output.png
-- [ ] task3_verify_success.png
-- [ ] task4_modified_message.png
-- [ ] task4_verify_fail.png
-- [ ] task5_tampered_sig.png
-- [ ] task6_wrong_key_fail.png
-- [ ] task6_substitution.png
-- [ ] task7_plain_rsa_output.png
-- [ ] task8_forgery_output.png
-- [ ] task9_sign_output.png
-- [ ] task9_forgery_fail.png
-- [ ] task10_collision.png
-- [ ] task10_sha256_no_collision.png
-
-### Content Check
-
-- [ ] Every task has: Objective + Steps Performed + Commands/Code + Screenshot(s) + Explanation
-- [ ] All three sub-questions answered per explanation section (what was done / what happened / why it matters)
-- [ ] Task 11 comparison table fully populated
-- [ ] Task 11 all six reflection questions answered
-- [ ] Appendix contains all 10 scripts
-- [ ] No raw output submitted without explanation
-- [ ] All code blocks correctly formatted
-- [ ] PDF exports cleanly with no broken layout
-
----
-
-*End of Report*
